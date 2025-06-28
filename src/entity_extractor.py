@@ -6,31 +6,40 @@ import re
 from pathlib import Path
 from typing import List, Dict
 from config import Config
-from utils import handle_errors
-from ner_trainer import PROJECT_PATTERNS
+from .utils import handle_errors
+from .ner_trainer import PROJECT_PATTERNS
 
 logger = logging.getLogger(__name__)
 
-@handle_errors(logger, "Model loading failed")
+@handle_errors(logger, "NER model loading failed")
 def load_ner_model(model_path: Path):
-    """Load trained NER model with fallback to training"""
+    """Load custom-trained NER model with sentencizer"""
     try:
-        # Check if model directory exists and has files
-        if model_path.exists() and any(model_path.iterdir()):
-            return spacy.load(model_path)
-        else:
-            raise OSError("Model directory empty")
-    except (OSError, IOError):
-        logger.warning("Model not found, training new model")
-        from ner_trainer import train_ner_model
+        nlp = spacy.load(model_path)
+        
+        # Add sentencizer to handle sentence boundaries
+        if "sentencizer" not in nlp.pipe_names:
+            nlp.add_pipe("sentencizer", first=True)
+            logger.info("Added sentencizer to pipeline")
+            
+        return nlp
+    except OSError:
+        logger.warning("NER model not found, training new model")
+        from .ner_trainer import train_ner_model
         train_ner_model(
-            Config.ANNOTATIONS_FILE,  # Use the correct config path
+            Config.INPUT_DIR / "annotations.json",
             model_path
         )
-        return spacy.load(model_path)
+        nlp = spacy.load(model_path)
+        
+        # Add sentencizer to new model
+        if "sentencizer" not in nlp.pipe_names:
+            nlp.add_pipe("sentencizer", first=True)
+            
+        return nlp
 
 def calculate_confidence(ent) -> float:
-    """Calculate confidence score based on entity properties"""
+    """Calculate confidence score for NER prediction"""
     confidence = 0.7  # Base confidence
     
     # Length-based confidence
@@ -50,15 +59,18 @@ def calculate_confidence(ent) -> float:
     
     return min(0.99, round(confidence, 2))
 
-@handle_errors(logger, "Entity extraction failed")
+@handle_errors(logger, "Entity extraction with NER failed")
 def extract_projects(nlp, pdf_data: dict) -> List[Dict]:
-    """Extract projects from processed PDF data"""
+    """Extract PROJECT entities using custom NER model"""
     results = []
     seen_entities = set()
     
     for pdf_name, pages in pdf_data.items():
         for page in pages:
+            # Process text with our custom NER model
             doc = nlp(page["text"])
+            
+            # Extract all recognized PROJECT entities
             for ent in doc.ents:
                 if ent.label_ == "PROJECT":
                     # Deduplication
@@ -68,11 +80,16 @@ def extract_projects(nlp, pdf_data: dict) -> List[Dict]:
                     seen_entities.add(entity_key)
                     
                     # Get context sentence
-                    context = next(
-                        (sent.text for sent in doc.sents 
-                         if ent.start >= sent.start and ent.end <= sent.end),
-                        ent.sent.text
-                    )
+                    try:
+                        # More robust sentence boundary detection
+                        context = next(
+                            (sent.text for sent in doc.sents 
+                             if ent.start >= sent.start and ent.end <= sent.end),
+                            ent.sent.text if ent.sent else doc.text
+                        )
+                    except ValueError:
+                        # Fallback to the entire page text if needed
+                        context = page["text"][:200] + "..."  # First 200 chars
                     
                     results.append({
                         "pdf_file": pdf_name,
@@ -86,21 +103,23 @@ def extract_projects(nlp, pdf_data: dict) -> List[Dict]:
 
 @handle_errors(logger, "Output saving failed")
 def save_to_jsonl(data: List[Dict], output_path: Path) -> None:
-    """Save results in JSONL format"""
+    """Save NER extraction results in JSONL format"""
     with jsonlines.open(output_path, "w") as writer:
         writer.write_all(data)
 
 if __name__ == "__main__":
     Config.setup_logging()
+    
+    # Load our custom-trained NER model
     nlp = load_ner_model(Config.NER_MODEL_PATH)
     
     # Load extracted text
     with open(Config.TEMP_DIR / "pdf_texts.json", "r") as f:
         pdf_data = json.load(f)
     
-    # Extract projects
+    # Extract projects using NER model
     projects = extract_projects(nlp, pdf_data)
     
     # Save results
     save_to_jsonl(projects, Config.TEMP_DIR / "entities.jsonl")
-    logger.info(f"Extracted {len(projects)} projects")
+    logger.info(f"NER extracted {len(projects)} projects")
