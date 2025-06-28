@@ -1,19 +1,26 @@
 #!/bin/bash
+set -e
 
-# Step 1: Setup environment
 echo "Setting up environment..."
 export PYTHONPATH=$PWD/src:$PYTHONPATH
 
-# Step 2: Process PDFs
 echo "Processing PDFs..."
-python src/pdf_processor.py
+python src/pdf_processor.py || { 
+    echo "PDF processing failed! Check logs for details." 
+    exit 1
+}
 
-# Step 3: Extract entities
 echo "Extracting entities..."
-python src/entity_extractor.py
+python src/entity_extractor.py || {
+    echo "Entity extraction failed! Check logs for details."
+    exit 1
+}
 
-# Step 4: Geolocation
 echo "Geolocating projects..."
-python src/geo_locator.py
+python src/geo_locator.py || {
+    echo "Geolocation failed! Check logs for details."
+    exit 1
+}
 
-echo "Pipeline completed! Results saved to data/output/final_results.jsonl"
+echo "Pipeline completed successfully!"
+echo "Results saved to: data/output/final_results.jsonl"
