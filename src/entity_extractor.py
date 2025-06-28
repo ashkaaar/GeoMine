@@ -4,6 +4,7 @@ import jsonlines
 import logging
 import re
 import sys
+import os
 from pathlib import Path
 from typing import List, Dict
 
@@ -20,6 +21,9 @@ logger = logging.getLogger(__name__)
 def load_ner_model(model_path: Path):
     """Load custom-trained NER model with sentencizer"""
     try:
+        # Ensure model directory exists
+        model_path.parent.mkdir(parents=True, exist_ok=True)
+        
         nlp = spacy.load(model_path)
         
         # Add sentencizer to handle sentence boundaries
@@ -29,8 +33,7 @@ def load_ner_model(model_path: Path):
             
         return nlp
     except OSError as e:
-        logger.error(f"NER model loading failed: {e}")
-        logger.warning("Training new model...")
+        logger.warning(f"NER model not found: {e}, training new model")
         from src.ner_trainer import train_ner_model
         train_ner_model(
             Config.INPUT_DIR / "annotations.json",
@@ -76,6 +79,10 @@ def extract_projects(nlp, pdf_data: dict) -> List[Dict]:
     for pdf_name, pages in pdf_data.items():
         logger.info(f"Processing {pdf_name} with {len(pages)} pages")
         for page in pages:
+            # Skip empty pages
+            if not page["text"].strip():
+                continue
+                
             # Process text with our custom NER model
             doc = nlp(page["text"])
             
@@ -114,12 +121,17 @@ def extract_projects(nlp, pdf_data: dict) -> List[Dict]:
 @handle_errors(logger, "Output saving failed")
 def save_to_jsonl(data: List[Dict], output_path: Path) -> None:
     """Save NER extraction results in JSONL format"""
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     with jsonlines.open(output_path, "w") as writer:
         writer.write_all(data)
     logger.info(f"Saved {len(data)} entities to {output_path}")
 
 if __name__ == "__main__":
     Config.setup_logging()
+    Config.setup_directories()
+    
+    # Create model directory if it doesn't exist
+    Config.NER_MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
     
     # Load our custom-trained NER model
     logger.info("Loading NER model...")
