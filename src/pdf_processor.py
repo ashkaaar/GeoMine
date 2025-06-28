@@ -1,53 +1,40 @@
 import pdfplumber
 import json
-import logging
 from pathlib import Path
+import logging
 from config import Config
-from utils import handle_errors
 
 logger = logging.getLogger(__name__)
 
-@handle_errors(logger, "PDF text extraction failed")
-def extract_text_from_pdf(pdf_path: Path) -> list[dict]:
-    """Extract text with page numbers preserving document structure"""
+def extract_text_from_pdf(pdf_path: Path) -> list:
     pages = []
     try:
         with pdfplumber.open(pdf_path) as pdf:
             for i, page in enumerate(pdf.pages, 1):
-                text = page.extract_text()
-                if not text:
-                    logger.warning(f"Empty page {i} in {pdf_path.name}")
-                    continue
+                text = page.extract_text() or ""
                 pages.append({
                     "page_number": i,
                     "text": text
                 })
-        logger.info(f"Extracted {len(pages)} pages from {pdf_path.name}")
-        return pages
     except Exception as e:
-        logger.error(f"Failed to process {pdf_path.name}: {str(e)}")
-        return []
+        logger.error(f"Error processing {pdf_path}: {e}")
+    return pages
 
-@handle_errors(logger, "PDF processing failed")
-def process_pdfs(input_dir: Path, output_path: Path) -> dict:
-    """Process all PDFs in directory"""
-    results = {}
+def process_pdfs(input_dir: Path, output_path: Path) -> None:
+    pdf_texts = {}
     for pdf_file in input_dir.glob("*.pdf"):
-        if pdf_file.suffix.lower() != ".pdf":
-            continue
         logger.info(f"Processing {pdf_file.name}")
         pages = extract_text_from_pdf(pdf_file)
-        results[pdf_file.name] = pages
+        pdf_texts[pdf_file.name] = pages
     
-    # Save intermediate output
     with open(output_path, 'w') as f:
-        json.dump(results, f, indent=2)
-    logger.info(f"Saved text from {len(results)} PDFs to {output_path}")
-    return results
+        json.dump(pdf_texts, f, indent=2)
+    logger.info(f"Saved text from {len(pdf_texts)} PDFs to {output_path}")
 
 if __name__ == "__main__":
+    Config.setup_directories()
     Config.setup_logging()
     process_pdfs(
-        Config.PDF_DIR,
+        Config.INPUT_DIR / "pdf_reports",
         Config.TEMP_DIR / "pdf_texts.json"
     )

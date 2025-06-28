@@ -1,29 +1,28 @@
+import logging
 from pathlib import Path
+import os
 
 class Config:
-    # Base directory should be the project root
-    BASE_DIR = Path(__file__).resolve().parent.parent
-    
-    # Input directories (relative to project root)
+    BASE_DIR = Path(__file__).resolve().parent.parent 
     INPUT_DIR = BASE_DIR / "data" / "input"
-    PDF_DIR = INPUT_DIR / "pdf_reports"
-    ANNOTATIONS_FILE = INPUT_DIR / "converted_annotations.json"
-    
-    # Output directories (relative to project root)
     OUTPUT_DIR = BASE_DIR / "data" / "output"
     TEMP_DIR = BASE_DIR / "data" / "temp"
+    NER_MODEL_PATH = BASE_DIR / "models" / "ner_model"
     
-    # Model paths
-    NER_MODEL_PATH = BASE_DIR / "ner_model"
+    @classmethod
+    def setup_directories(cls):
+        cls.INPUT_DIR.mkdir(parents=True, exist_ok=True)
+        cls.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        cls.TEMP_DIR.mkdir(parents=True, exist_ok=True)
+        cls.NER_MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
     
-    @staticmethod
-    def setup_logging():
-        import logging
+    @classmethod
+    def setup_logging(cls):
         logging.basicConfig(
             level=logging.INFO,
             format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
             handlers=[
-                logging.FileHandler("pipeline.log"),
+                logging.FileHandler(cls.BASE_DIR / "pipeline.log"),
                 logging.StreamHandler()
             ]
         )

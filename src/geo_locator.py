@@ -1,115 +1,78 @@
-import os
-import json
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).resolve().parent))  # add src/ to path
+
 import jsonlines
 import logging
-import re
-import requests
+import os
+import google.generativeai as genai
 from dotenv import load_dotenv
-from pathlib import Path
-from typing import Optional, Tuple, List, Dict
 from config import Config
-from utils import handle_errors
+from geopy.geocoders import GeoNames
+
 
 logger = logging.getLogger(__name__)
 load_dotenv(Config.BASE_DIR / ".env")
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-GEONAMES_USERNAME = os.getenv("GEONAMES_USERNAME", "radixtest")  # public test account
-
-@handle_errors(logger, "Gemini initialization failed")
-def init_gemini():
-    if not GEMINI_API_KEY:
-        raise ValueError("GEMINI_API_KEY not set in .env file")
-    import google.generativeai as genai
-    genai.configure(api_key=GEMINI_API_KEY)
-    return genai.GenerativeModel('gemini-pro')
-
-@handle_errors(logger, "Gemini geolocation failed")
-def infer_coordinates_gemini(context: str, model) -> Optional[Tuple[float, float]]:
-    """Infer coordinates from context using Gemini"""
-    prompt = f"""
-    You are an expert in geography and mining. Given the following context about a mining project, 
-    infer the most likely latitude and longitude coordinates. If the location is ambiguous, return null.
-    Respond ONLY with the coordinates in the format [latitude, longitude] or null.
-    
-    Context: {context}
-    """
+def setup_gemini():
     try:
-        response = model.generate_content(prompt)
-        text = response.text.strip()
-        # Extract coordinates using regex
-        match = re.search(r'\[(-?\d+\.\d+),\s*(-?\d+\.\d+)\]', text)
-        if match:
-            lat = float(match.group(1))
-            lon = float(match.group(2))
-            return (lat, lon)
-        return None
+        import google.generativeai as genai
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            raise ValueError("GEMINI_API_KEY not set")
+        genai.configure(api_key=api_key)
+        return genai.GenerativeModel("gemini-pro")
     except Exception as e:
-        logger.error(f"Gemini error: {e}")
+        logger.warning(f"Gemini unavailable: {e}")
         return None
 
-@handle_errors(logger, "Geonames geolocation failed")
-def infer_coordinates_geonames(location_name: str) -> Optional[Tuple[float, float]]:
-    """Fallback geolocation using Geonames search"""
-    base_url = "http://api.geonames.org/searchJSON"
-    params = {
-        "q": location_name,
-        "maxRows": 1,
-        "username": GEONAMES_USERNAME
-    }
+def infer_coordinates(context: str, gemini_model) -> list:
+    """Try Gemini API first, fallback to GeoNames"""
+    if gemini_model:
+        try:
+            prompt = f"""Given this context about a mining project: "{context.strip()}"
+            What are the most likely latitude and longitude coordinates?
+            Respond ONLY with coordinates like: [latitude, longitude]
+            If unsure, respond with null."""
+            response = gemini_model.generate_content(prompt)
+            text = response.text.strip()
+            if text.startswith("[") and text.endswith("]"):
+                coords = eval(text)
+                if isinstance(coords, list) and len(coords) == 2:
+                    return coords
+        except Exception as e:
+            logger.warning(f"Gemini failed: {e}")
+
+    # ➤ Fallback to GeoNames
     try:
-        response = requests.get(base_url, params=params)
-        data = response.json()
-        if "geonames" in data and data["geonames"]:
-            place = data["geonames"][0]
-            return (float(place["lat"]), float(place["lng"]))
-        return None
+        username = os.getenv("GEONAMES_USERNAME")
+        if not username:
+            raise ValueError("GEONAMES_USERNAME not set in .env")
+        geolocator = GeoNames(username=username)
+        location = geolocator.geocode(context)
+        if location:
+            return [location.latitude, location.longitude]
     except Exception as e:
-        logger.error(f"Geonames error: {e}")
-        return None
+        logger.warning(f"GeoNames failed: {e}")
 
-@handle_errors(logger, "Geolocation update failed")
-def update_coordinates(entities: List[Dict]) -> List[Dict]:
-    """Update entities with coordinates using multi-stage approach"""
-    gemini_model = init_gemini() if GEMINI_API_KEY else None
-    
-    for entity in entities:
-        context = entity["context_sentence"]
-        project_name = entity["project_name"]
-        
-        # Try Gemini first if available
-        coords = None
-        if gemini_model:
-            coords = infer_coordinates_gemini(context, gemini_model)
-        
-        # Fallback to Geonames project name search
-        if not coords:
-            coords = infer_coordinates_geonames(project_name)
-        
-        entity["coordinates"] = list(coords) if coords else None
-    
-    return entities
-
-@handle_errors(logger, "Geolocation processing failed")
-def process_geolocation(input_path: Path, output_path: Path) -> None:
-    """Process geolocation for all entities"""
-    # Load entities
-    entities = []
-    with jsonlines.open(input_path) as reader:
-        for entity in reader:
-            entities.append(entity)
-    
-    # Update coordinates
-    updated_entities = update_coordinates(entities)
-    
-    # Save results
-    with jsonlines.open(output_path, "w") as writer:
-        writer.write_all(updated_entities)
-    logger.info(f"Geolocated {len(updated_entities)} projects")
+    return None
 
 if __name__ == "__main__":
     Config.setup_logging()
-    process_geolocation(
-        Config.TEMP_DIR / "entities.jsonl",
-        Config.OUTPUT_DIR / "final_results.jsonl"
-    )
+    Config.setup_directories()
+
+    gemini_model = setup_gemini()
+
+    entities = []
+    with jsonlines.open(Config.TEMP_DIR / "entities.jsonl") as reader:
+        for entity in reader:
+            entities.append(entity)
+
+    for entity in entities:
+        context = entity.get("context_sentence", "")
+        entity["coordinates"] = infer_coordinates(context, gemini_model)
+
+    with jsonlines.open(Config.OUTPUT_DIR / "final_results.jsonl", "w") as writer:
+        writer.write_all(entities)
+
+    logger.info(f"Geolocated {len(entities)} projects")
