@@ -58,7 +58,7 @@ def train_ner_model(annotations_path: Path, model_output: Path) -> None:
     
     # Train model
     nlp.initialize()
-    for itn in range(1):  # 10 iterations
+    for itn in range(15):  # 15 iterations
         losses = {}
         random.shuffle(examples)
         for batch in spacy.util.minibatch(examples, size=2):
