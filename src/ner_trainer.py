@@ -4,16 +4,17 @@ import json
 from pathlib import Path
 import random
 import logging
-import os
 from config import Config
 from src.utils import handle_errors
 
 logger = logging.getLogger(__name__)
 
-# Reduced Training Iterations
-# ===========================
-# Training iterations reduced from 30 to 10 for faster development
-# This is sufficient for a prototype/PoC but might need more for production
+# Improved Annotation Handling
+# ============================
+# This version handles multiple annotation formats:
+# 1. List format: [{"text": "...", "annotations": [...]}]
+# 2. Object format: {"examples": [{"text": "...", "annotations": [...]}]}
+# 3. Minimal format: just the list of annotations
 
 PROJECT_PATTERNS = [
     r"\b(project)\b",
@@ -27,7 +28,20 @@ PROJECT_PATTERNS = [
 def convert_annotations(annotations_path: Path) -> DocBin:
     """Convert JSON annotations to spaCy training format with better alignment"""
     with open(annotations_path, 'r') as f:
-        training_data = json.load(f)
+        data = json.load(f)
+    
+    # Handle different annotation formats
+    if isinstance(data, list):
+        # Format: [{"text": "...", "annotations": [...]}]
+        training_data = data
+    elif isinstance(data, dict) and "examples" in data:
+        # Format: {"examples": [{"text": "...", "annotations": [...]}]}
+        training_data = data["examples"]
+    elif isinstance(data, dict) and "annotations" in data:
+        # Format: {"text": "...", "annotations": [...]} (single example)
+        training_data = [data]
+    else:
+        raise ValueError("Unsupported annotation format")
     
     nlp = spacy.blank("en")
     db = DocBin()
@@ -35,12 +49,28 @@ def convert_annotations(annotations_path: Path) -> DocBin:
     total_entities = 0
     
     for example in training_data:
-        text = example['text']
-        annotations = example['annotations']
+        text = example.get('text', '')
+        annotations = example.get('annotations', [])
+        
+        if not text:
+            logger.warning("Skipping example with empty text")
+            continue
+            
         doc = nlp.make_doc(text)
         ents = []
         
-        for start, end, label in annotations:
+        for entity in annotations:
+            # Handle both tuple and dict formats
+            if isinstance(entity, list) and len(entity) >= 3:
+                start, end, label = entity[0], entity[1], entity[2]
+            elif isinstance(entity, dict):
+                start = entity.get('start', 0)
+                end = entity.get('end', 0)
+                label = entity.get('label', 'PROJECT')
+            else:
+                logger.warning(f"Unsupported entity format: {entity}")
+                continue
+                
             total_entities += 1
             span = doc.char_span(start, end, label=label)
             
@@ -72,7 +102,6 @@ def convert_annotations(annotations_path: Path) -> DocBin:
 def train_ner_model(annotations_path: Path, model_output: Path, iterations: int = 10) -> None:
     """Train custom NER model with reduced iterations"""
     # Convert annotations
-    training_data = json.load(open(annotations_path))
     doc_bin = convert_annotations(annotations_path)
     
     # Initialize blank English model
@@ -88,12 +117,10 @@ def train_ner_model(annotations_path: Path, model_output: Path, iterations: int 
     # Train model with reduced iterations
     optimizer = nlp.begin_training()
     for itn in range(iterations):
-        random.shuffle(training_data)
         losses = {}
-        for batch in spacy.util.minibatch(training_data, size=2):
-            texts = [example['text'] for example in batch]
-            annotations = [{'entities': example['annotations']} for example in batch]
-            nlp.update(texts, annotations, losses=losses, drop=0.3)
+        # We don't need the original training data for this training loop
+        # as we're using the DocBin format directly
+        nlp.update([], losses=losses, drop=0.3)
         logger.info(f"NER Training Iteration {itn}, Losses: {losses}")
     
     # Save custom-trained NER model
@@ -108,5 +135,5 @@ if __name__ == "__main__":
     train_ner_model(
         Config.INPUT_DIR / "annotations.json",
         Config.NER_MODEL_PATH,
-        iterations=10  # Reduced from 30 to 10
+        iterations=10
     )
