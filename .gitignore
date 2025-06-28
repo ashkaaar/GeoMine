@@ -1,3 +1,7 @@
-.venv/
 __pycache__/
 *.pyc
+.env
+.venv/
+venv/
+data/temp/
+*.log
