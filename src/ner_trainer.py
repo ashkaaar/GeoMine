@@ -9,12 +9,12 @@ from src.utils import handle_errors
 
 logger = logging.getLogger(__name__)
 
-# Improved Annotation Handling
-# ============================
-# This version handles multiple annotation formats:
-# 1. List format: [{"text": "...", "annotations": [...]}]
-# 2. Object format: {"examples": [{"text": "...", "annotations": [...]}]}
-# 3. Minimal format: just the list of annotations
+# Label Studio Format Support
+# ===========================
+# This version handles the Label Studio annotation format:
+# - Each item has a 'data' field containing the text
+# - Annotations are in 'annotations' field
+# - Each annotation has a 'result' list with entity spans
 
 PROJECT_PATTERNS = [
     r"\b(project)\b",
@@ -26,22 +26,39 @@ PROJECT_PATTERNS = [
 
 @handle_errors(logger, "Annotation conversion failed")
 def convert_annotations(annotations_path: Path) -> DocBin:
-    """Convert JSON annotations to spaCy training format with better alignment"""
+    """Convert Label Studio JSON annotations to spaCy training format"""
     with open(annotations_path, 'r') as f:
         data = json.load(f)
     
-    # Handle different annotation formats
-    if isinstance(data, list):
-        # Format: [{"text": "...", "annotations": [...]}]
-        training_data = data
-    elif isinstance(data, dict) and "examples" in data:
-        # Format: {"examples": [{"text": "...", "annotations": [...]}]}
-        training_data = data["examples"]
-    elif isinstance(data, dict) and "annotations" in data:
-        # Format: {"text": "...", "annotations": [...]} (single example)
-        training_data = [data]
+    # Handle Label Studio format
+    if isinstance(data, list) and data and 'data' in data[0]:
+        logger.info("Processing Label Studio annotation format")
+        training_data = []
+        for example in data:
+            # Extract text from 'data' field
+            text = example.get('data', {}).get('text', '')
+            
+            # Extract annotations
+            annotations = []
+            for ann in example.get('annotations', []):
+                for result in ann.get('result', []):
+                    value = result.get('value', {})
+                    start = value.get('start')
+                    end = value.get('end')
+                    labels = value.get('labels', [])
+                    
+                    if start is not None and end is not None and labels:
+                        # Use the first label if multiple exist
+                        label = labels[0]
+                        annotations.append([start, end, label])
+            
+            training_data.append({
+                'text': text,
+                'annotations': annotations
+            })
     else:
-        raise ValueError("Unsupported annotation format")
+        # Handle other formats
+        training_data = data
     
     nlp = spacy.blank("en")
     db = DocBin()
