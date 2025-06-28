@@ -1,10 +1,8 @@
-# 📄 GeoMine: Project Location Extractor
+# 🛠️ GeoMine: Mining Project Extraction from PDF Reports (NER + GeoLocation)
 
-> A lightweight NLP pipeline to extract mining project names and infer their locations from geological PDF reports.
+> Extract named entities and locations from geological PDFs using spaCy NER and GeoNames. Built for mining industry document parsing.
 
 **GeoMine** is a modular information extraction pipeline built to process unstructured mining documents, identify project names using Named Entity Recognition (NER), and estimate their geographic locations using large language models. Designed with simplicity, modularity, and clarity in mind, it's suitable for both production and research use cases.
-
-Tags: ner, geolocation, spacy, nlp, mining, geonames, pdf, project-extraction, named-entity-recognition.
 
 ---
 
@@ -164,3 +162,4 @@ Tests live in the `tests/` directory.
 
 This project is licensed under the [MIT License](LICENSE).
 
+<sub><i>This project helps in extracting mining project names and estimating their coordinates from unstructured PDF reports using NER and geolocation. Ideal for geological data analysis, natural resource intelligence, and environmental reports.</i></sub>
