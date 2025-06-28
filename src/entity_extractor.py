@@ -28,8 +28,9 @@ def load_ner_model(model_path: Path):
             logger.info("Added sentencizer to pipeline")
             
         return nlp
-    except OSError:
-        logger.warning("NER model not found, training new model")
+    except OSError as e:
+        logger.error(f"NER model loading failed: {e}")
+        logger.warning("Training new model...")
         from src.ner_trainer import train_ner_model
         train_ner_model(
             Config.INPUT_DIR / "annotations.json",
@@ -70,7 +71,10 @@ def extract_projects(nlp, pdf_data: dict) -> List[Dict]:
     results = []
     seen_entities = set()
     
+    logger.info(f"Processing {len(pdf_data)} PDF files...")
+    
     for pdf_name, pages in pdf_data.items():
+        logger.info(f"Processing {pdf_name} with {len(pages)} pages")
         for page in pages:
             # Process text with our custom NER model
             doc = nlp(page["text"])
@@ -81,6 +85,7 @@ def extract_projects(nlp, pdf_data: dict) -> List[Dict]:
                     # Deduplication
                     entity_key = f"{pdf_name}|{page['page_number']}|{ent.text}"
                     if entity_key in seen_entities:
+                        logger.debug(f"Skipping duplicate entity: {ent.text}")
                         continue
                     seen_entities.add(entity_key)
                     
@@ -111,20 +116,27 @@ def save_to_jsonl(data: List[Dict], output_path: Path) -> None:
     """Save NER extraction results in JSONL format"""
     with jsonlines.open(output_path, "w") as writer:
         writer.write_all(data)
+    logger.info(f"Saved {len(data)} entities to {output_path}")
 
 if __name__ == "__main__":
     Config.setup_logging()
     
     # Load our custom-trained NER model
+    logger.info("Loading NER model...")
     nlp = load_ner_model(Config.NER_MODEL_PATH)
+    logger.info("NER model loaded successfully")
     
     # Load extracted text
-    with open(Config.TEMP_DIR / "pdf_texts.json", "r") as f:
+    text_path = Config.TEMP_DIR / "pdf_texts.json"
+    logger.info(f"Loading extracted text from {text_path}")
+    with open(text_path, "r") as f:
         pdf_data = json.load(f)
     
     # Extract projects using NER model
+    logger.info("Extracting projects...")
     projects = extract_projects(nlp, pdf_data)
     
     # Save results
-    save_to_jsonl(projects, Config.TEMP_DIR / "entities.jsonl")
+    output_path = Config.TEMP_DIR / "entities.jsonl"
+    save_to_jsonl(projects, output_path)
     logger.info(f"NER extracted {len(projects)} projects")
