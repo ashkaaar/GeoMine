@@ -6,7 +6,7 @@ import random
 import logging
 import os
 from config import Config
-from .utils import handle_errors
+from src.utils import handle_errors
 
 logger = logging.getLogger(__name__)
 

@@ -3,11 +3,16 @@ import json
 import jsonlines
 import logging
 import re
+import sys
 from pathlib import Path
 from typing import List, Dict
+
+# Add parent directory to path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from config import Config
-from .utils import handle_errors
-from .ner_trainer import PROJECT_PATTERNS
+from src.utils import handle_errors
+from src.ner_trainer import PROJECT_PATTERNS
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +30,7 @@ def load_ner_model(model_path: Path):
         return nlp
     except OSError:
         logger.warning("NER model not found, training new model")
-        from .ner_trainer import train_ner_model
+        from src.ner_trainer import train_ner_model
         train_ner_model(
             Config.INPUT_DIR / "annotations.json",
             model_path
