@@ -1,74 +1,110 @@
 import spacy
+from spacy.tokens import DocBin
 import json
-import random
 from pathlib import Path
-from spacy.training.example import Example
+import random
+import logging
+from config import Config
+from .utils import handle_errors
 
-# Regex patterns for project name detection
+logger = logging.getLogger(__name__)
+
+# Improved NER Training with Alignment Fixes
+# ==========================================
+# This version includes:
+# 1. Better handling of misaligned entities
+# 2. More robust token boundary alignment
+# 3. Enhanced logging for problematic annotations
+
 PROJECT_PATTERNS = [
-    r"\b[A-Z][a-z]+\s(?:Mine|Project|Deposit)\b",
-    r"\b[A-Z]{2,}\s\d+\b",
-    r"\b(?:North|South|East|West)\s[A-Z][a-z]+\b"
+    r"\b(project)\b",
+    r"\b(mine)\b",
+    r"\b(deposit)\b",
+    r"\b(exploration)\b",
+    r"\b(property)\b"
 ]
 
-def create_training_data(annotations_path: Path):
-    """Convert annotations to spaCy training format"""
+@handle_errors(logger, "Annotation conversion failed")
+def convert_annotations(annotations_path: Path) -> DocBin:
+    """Convert JSON annotations to spaCy training format with better alignment"""
     with open(annotations_path, 'r') as f:
-        annotations = json.load(f)
+        training_data = json.load(f)
     
-    training_data = []
-    for item in annotations:
-        entities = []
-        for annotation in item["annotations"]:
-            # Ensure we only train on PROJECT entities
-            if annotation["label"] == "PROJECT":
-                start = annotation["start"]
-                end = annotation["end"]
-                entities.append((start, end, "PROJECT"))
+    nlp = spacy.blank("en")
+    db = DocBin()
+    misaligned_count = 0
+    total_entities = 0
+    
+    for example in training_data:
+        text = example['text']
+        annotations = example['annotations']
+        doc = nlp.make_doc(text)
+        ents = []
         
-        training_data.append((item["text"], {"entities": entities}))
+        for start, end, label in annotations:
+            total_entities += 1
+            span = doc.char_span(start, end, label=label)
+            
+            if span is None:
+                # Try to find the closest token boundaries
+                start_token = next((i for i, token in enumerate(doc) if token.idx >= start), None)
+                end_token = next((i for i, token in enumerate(doc) if token.idx + len(token) >= end), None)
+                
+                if start_token is not None and end_token is not None:
+                    span = doc[start_token:end_token+1]
+                    span.label_ = label
+                    ents.append(span)
+                    logger.debug(f"Adjusted misaligned entity: {text[start:end]} -> {span.text}")
+                else:
+                    misaligned_count += 1
+                    logger.warning(f"Could not align entity: '{text[start:end]}' at ({start}, {end})")
+            else:
+                ents.append(span)
+        
+        doc.ents = ents
+        db.add(doc)
     
-    return training_data
-
-
-def train_ner_model(annotations_path: Path, model_path: Path):
-    """Train a new NER model"""
-    # Create model directory if it doesn't exist
-    model_path.mkdir(parents=True, exist_ok=True)
+    if misaligned_count > 0:
+        logger.warning(f"{misaligned_count}/{total_entities} entities could not be aligned")
     
-    # Create blank English model
+    return db
+
+@handle_errors(logger, "NER model training failed")
+def train_ner_model(annotations_path: Path, model_output: Path) -> None:
+    """Train custom NER model to recognize PROJECT entities"""
+    # Convert annotations
+    training_data = json.load(open(annotations_path))
+    doc_bin = convert_annotations(annotations_path)
+    
+    # Initialize blank English model
     nlp = spacy.blank("en")
     
-    # Add NER pipeline
+    # Create NER pipeline component
     if "ner" not in nlp.pipe_names:
         ner = nlp.add_pipe("ner")
-    else:
-        ner = nlp.get_pipe("ner")
     
+    # Add PROJECT label to the NER model
     ner.add_label("PROJECT")
     
-    # Get training data
-    train_data = create_training_data(annotations_path)
+    # Train model
+    optimizer = nlp.begin_training()
+    for itn in range(30):  # 30 training iterations
+        random.shuffle(training_data)
+        losses = {}
+        for batch in spacy.util.minibatch(training_data, size=2):
+            texts = [example['text'] for example in batch]
+            annotations = [{'entities': example['annotations']} for example in batch]
+            nlp.update(texts, annotations, losses=losses, drop=0.3)
+        logger.info(f"NER Training Iteration {itn}, Losses: {losses}")
     
-    # Disable other pipes during training
-    other_pipes = [pipe for pipe in nlp.pipe_names if pipe != "ner"]
-    with nlp.disable_pipes(*other_pipes):
-        optimizer = nlp.begin_training()
-        
-        # Training loop
-        for itn in range(30):  # 30 iterations
-            random.shuffle(train_data)
-            losses = {}
-            
-            # Batch training
-            for batch in spacy.util.minibatch(train_data, size=2):
-                for text, annotations in batch:
-                    doc = nlp.make_doc(text)
-                    example = Example.from_dict(doc, annotations)
-                    nlp.update([example], drop=0.5, losses=losses)
-            
-            print(f"Iteration {itn}, Losses: {losses}")
-    
-    # Save model
-    nlp.to_disk(model_path)
-    return nlp
+    # Save custom-trained NER model
+    nlp.to_disk(model_output)
+    logger.info(f"Custom NER model saved to {model_output}")
+
+if __name__ == "__main__":
+    Config.setup_directories()
+    Config.setup_logging()
+    train_ner_model(
+        Config.INPUT_DIR / "annotations.json",
+        Config.NER_MODEL_PATH
+    )
