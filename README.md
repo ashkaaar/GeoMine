@@ -40,14 +40,32 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### Project Structure
+### 📁 Project Structure
 
 ```
-data/
-└── input/
-    ├── annotations.json       # Project name annotations (Label Studio format)
-    └── pdf_reports/           # Geological PDFs
+.
+├── data/
+│   ├── input/
+│   │   ├── annotations.json           # NER labels from Label Studio
+│   │   ├── converted_annotations.json # spaCy-formatted training data
+│   │   └── pdf_reports/               # Input geological PDFs
+│   ├── output/                        # Final extracted results
+│   └── temp/                          # Intermediate files (e.g., text dump)
+├── models/                            # Trained spaCy NER model
+├── src/
+│   ├── config.py                      # Path setup and logging
+│   ├── pdf_processor.py               # PDF → text
+│   ├── ner_trainer.py                 # Train custom NER
+│   ├── entity_extractor.py           # Detect entities from text
+│   ├── geo_locator.py                 # Geolocation logic (GeoNames)
+│   └── utils.py                       # Helpers and error handling
+├── tests/                             # Unit tests (pytest)
+├── run_pipeline.sh                    # One-command runner
+├── requirements.txt
+├── README.md
+└── pipeline.log                       # Pipeline logs
 ```
+
 
 ### Run the Pipeline
 
