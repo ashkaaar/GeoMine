@@ -4,6 +4,8 @@
 
 **GeoMine** is a modular information extraction pipeline built to process unstructured mining documents, identify project names using Named Entity Recognition (NER), and estimate their geographic locations using large language models. Designed with simplicity, modularity, and clarity in mind, it's suitable for both production and research use cases.
 
+Tags: ner, geolocation, spacy, nlp, mining, geonames, pdf, project-extraction, named-entity-recognition.
+
 ---
 
 ## 📌 Overview
