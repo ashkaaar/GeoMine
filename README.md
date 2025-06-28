@@ -157,3 +157,8 @@ Tests live in the `tests/` directory.
 
 **Avishkar Dandge**  
 [GitHub](https://github.com/ashkaaar)
+
+## 📝 License
+
+This project is licensed under the [MIT License](LICENSE).
+
