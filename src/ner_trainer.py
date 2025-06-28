@@ -4,17 +4,18 @@ import json
 from pathlib import Path
 import random
 import logging
+from spacy.util import filter_spans
 from config import Config
 from src.utils import handle_errors
 
 logger = logging.getLogger(__name__)
 
-# Label Studio Format Support
-# ===========================
-# This version handles the Label Studio annotation format:
-# - Each item has a 'data' field containing the text
-# - Annotations are in 'annotations' field
-# - Each annotation has a 'result' list with entity spans
+# Improved Entity Span Handling
+# =============================
+# This version resolves overlapping entities by:
+# 1. Using spaCy's filter_spans to resolve overlaps
+# 2. Prioritizing longer spans for better context
+# 3. Adding detailed logging for conflict resolution
 
 PROJECT_PATTERNS = [
     r"\b(project)\b",
@@ -64,6 +65,7 @@ def convert_annotations(annotations_path: Path) -> DocBin:
     db = DocBin()
     misaligned_count = 0
     total_entities = 0
+    overlap_count = 0
     
     for example in training_data:
         text = example.get('text', '')
@@ -107,11 +109,19 @@ def convert_annotations(annotations_path: Path) -> DocBin:
             else:
                 ents.append(span)
         
-        doc.ents = ents
+        # Resolve overlapping entities
+        filtered_ents = filter_spans(ents)
+        if len(filtered_ents) < len(ents):
+            overlap_count += len(ents) - len(filtered_ents)
+            logger.debug(f"Resolved {len(ents) - len(filtered_ents)} overlapping entities")
+        
+        doc.ents = filtered_ents
         db.add(doc)
     
     if misaligned_count > 0:
         logger.warning(f"{misaligned_count}/{total_entities} entities could not be aligned")
+    if overlap_count > 0:
+        logger.warning(f"Resolved {overlap_count} overlapping entity conflicts")
     
     return db
 
