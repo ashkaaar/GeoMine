@@ -4,17 +4,16 @@ import json
 from pathlib import Path
 import random
 import logging
+import os
 from config import Config
 from .utils import handle_errors
 
 logger = logging.getLogger(__name__)
 
-# Improved NER Training with Alignment Fixes
-# ==========================================
-# This version includes:
-# 1. Better handling of misaligned entities
-# 2. More robust token boundary alignment
-# 3. Enhanced logging for problematic annotations
+# Reduced Training Iterations
+# ===========================
+# Training iterations reduced from 30 to 10 for faster development
+# This is sufficient for a prototype/PoC but might need more for production
 
 PROJECT_PATTERNS = [
     r"\b(project)\b",
@@ -70,8 +69,8 @@ def convert_annotations(annotations_path: Path) -> DocBin:
     return db
 
 @handle_errors(logger, "NER model training failed")
-def train_ner_model(annotations_path: Path, model_output: Path) -> None:
-    """Train custom NER model to recognize PROJECT entities"""
+def train_ner_model(annotations_path: Path, model_output: Path, iterations: int = 10) -> None:
+    """Train custom NER model with reduced iterations"""
     # Convert annotations
     training_data = json.load(open(annotations_path))
     doc_bin = convert_annotations(annotations_path)
@@ -86,9 +85,9 @@ def train_ner_model(annotations_path: Path, model_output: Path) -> None:
     # Add PROJECT label to the NER model
     ner.add_label("PROJECT")
     
-    # Train model
+    # Train model with reduced iterations
     optimizer = nlp.begin_training()
-    for itn in range(30):  # 30 training iterations
+    for itn in range(iterations):
         random.shuffle(training_data)
         losses = {}
         for batch in spacy.util.minibatch(training_data, size=2):
@@ -104,7 +103,10 @@ def train_ner_model(annotations_path: Path, model_output: Path) -> None:
 if __name__ == "__main__":
     Config.setup_directories()
     Config.setup_logging()
+    
+    # Reduced to 10 iterations for faster training
     train_ner_model(
         Config.INPUT_DIR / "annotations.json",
-        Config.NER_MODEL_PATH
+        Config.NER_MODEL_PATH,
+        iterations=10  # Reduced from 30 to 10
     )
