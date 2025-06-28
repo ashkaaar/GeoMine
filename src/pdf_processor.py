@@ -3,7 +3,7 @@ import json
 import logging
 from pathlib import Path
 from config import Config
-from .utils import handle_errors
+from utils import handle_errors
 
 logger = logging.getLogger(__name__)
 

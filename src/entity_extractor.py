@@ -6,8 +6,8 @@ import re
 from pathlib import Path
 from typing import List, Dict
 from config import Config
-from .utils import handle_errors
-from .ner_trainer import PROJECT_PATTERNS
+from utils import handle_errors
+from ner_trainer import PROJECT_PATTERNS
 
 logger = logging.getLogger(__name__)
 
@@ -15,12 +15,16 @@ logger = logging.getLogger(__name__)
 def load_ner_model(model_path: Path):
     """Load trained NER model with fallback to training"""
     try:
-        return spacy.load(model_path)
-    except OSError:
+        # Check if model directory exists and has files
+        if model_path.exists() and any(model_path.iterdir()):
+            return spacy.load(model_path)
+        else:
+            raise OSError("Model directory empty")
+    except (OSError, IOError):
         logger.warning("Model not found, training new model")
-        from .ner_trainer import train_ner_model
+        from ner_trainer import train_ner_model
         train_ner_model(
-            Config.INPUT_DIR / "annotations.json",
+            Config.ANNOTATIONS_FILE,  # Use the correct config path
             model_path
         )
         return spacy.load(model_path)
