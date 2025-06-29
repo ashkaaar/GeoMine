@@ -65,6 +65,9 @@ def train_ner_model(annotations_path: Path, model_output: Path) -> None:
             nlp.update(batch, losses=losses, drop=0.3)
         logger.info(f"Iteration {itn}, Losses: {losses}")
     
+    # Ensure model output directory exists
+    model_output.mkdir(parents=True, exist_ok=True)
+    
     # Save model
     nlp.to_disk(model_output)
     logger.info(f"Model saved to {model_output}")
