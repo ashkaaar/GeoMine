@@ -7,7 +7,6 @@
 
 > Extract named entities and locations from geological PDFs using spaCy NER and Gemini LLMs. Built for mining industry document parsing.
 
-
 **GeoMine** is a modular information extraction pipeline built to process unstructured mining documents, identify project names using Named Entity Recognition (NER), and estimate their geographic locations using large language models. Designed with simplicity, modularity, and clarity in mind, it's suitable for both production and research use cases.
 
 ---
@@ -63,7 +62,7 @@ pip install -r requirements.txt
 │   ├── pdf_processor.py               # PDF → text
 │   ├── ner_trainer.py                 # Train custom NER
 │   ├── entity_extractor.py           # Detect entities from text
-│   ├── geo_locator.py                 # Geolocation logic (GeoNames)
+│   ├── geo_locator.py                 # Geolocation logic (LLM)
 │   └── utils.py                       # Helpers and error handling
 ├── tests/                             # Unit tests (pytest)
 ├── run_pipeline.sh                    # One-command runner
@@ -71,7 +70,6 @@ pip install -r requirements.txt
 ├── README.md
 └── pipeline.log                       # Pipeline logs
 ```
-
 
 ### Run the Pipeline
 
@@ -110,14 +108,6 @@ data/output/final_results.jsonl
 | Annotation format | `Label Studio JSON`             |
 | Geolocation (LLM) | `Gemini API` (Google AI Studio) |
 | Output structure  | `JSONL`                         |
-
----
-
-## ⚠️ Gemini API Limitations
-
-- **Gemini's API is not fully production-stable**, and namespace import issues may affect integration (`ModuleNotFoundError: No module named 'google'`).
-- If unavailable, **GeoMine falls back to `GeoNames`** for coordinate inference using keyword-based matching.
-- You can configure `GEONAMES_USERNAME` in your `.env` to enable the fallback behavior.
 
 ---
 
