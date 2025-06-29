@@ -16,16 +16,18 @@ client = genai.Client(api_key=api_key)
 
 def infer_coordinates_with_llm(context: str) -> list:
     """
-    Use Gemini 2.5 Flash to infer coordinates from a mining project context.
+    Use Gemini 2.5 Flash to infer coordinates with reasoning.
     Returns [lat, lon] or None.
     """
     prompt = f"""
-Context: \"{context}\"
+You are a mining geography expert. A vague project description is provided below.
 
-Give best-guess geographic coordinates [latitude, longitude] for the mining project described in the context.
+1. First, analyze the sentence for location clues (city, district, region, etc.)
+2. Reason step by step to infer the most probable Indian coordinates.
+3. Output ONLY the result as a JSON array [latitude, longitude] — or null if unsure.
 
-If no guess is possible, return null.
-Respond ONLY in this format: [lat, lon] or null
+Context:
+\"\"\"{context}\"\"\"
 """
 
     try:
@@ -35,12 +37,13 @@ Respond ONLY in this format: [lat, lon] or null
         )
         reply = response.text.strip()
 
+        # Safely parse reply
         if "null" in reply.lower():
             return None
         if reply.startswith("[") and reply.endswith("]"):
-            latlon = eval(reply)
-            if isinstance(latlon, list) and len(latlon) == 2:
-                return [float(latlon[0]), float(latlon[1])]
+            parts = reply.strip("[]").split(",")
+            lat, lon = float(parts[0]), float(parts[1])
+            return [lat, lon]
     except Exception as e:
         logger.warning(f"Gemini coordinate inference failed: {e}")
     return None
