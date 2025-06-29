@@ -3,6 +3,7 @@ from pathlib import Path
 import logging
 import os
 import json
+import re
 from dotenv import load_dotenv
 from config import Config
 from google import genai
@@ -22,13 +23,14 @@ def infer_coordinates_with_llm(context: str) -> list:
     prompt = f"""
 You are a mining geography expert. A vague project description is provided below.
 
-1. First, analyze the sentence for location clues (city, district, region, etc.)
-2. Reason step by step to infer the most probable Indian coordinates.
-3. Output ONLY the result as a JSON array [latitude, longitude] — or null if unsure.
+1. Analyze the sentence for location clues (e.g., district, region, nearby mines).
+2. If a precise match isn't possible, use your knowledge of mining regions in India or Australia to guess approximate coordinates.
+3. Output ONLY a JSON array like [latitude, longitude]. If it's completely ambiguous, return null.
 
 Context:
 \"\"\"{context}\"\"\"
 """
+
 
     try:
         response = client.models.generate_content(
@@ -37,17 +39,17 @@ Context:
         )
         reply = response.text.strip()
 
-        # Safely parse reply
-        if "null" in reply.lower():
-            return None
-        if reply.startswith("[") and reply.endswith("]"):
-            parts = reply.strip("[]").split(",")
-            lat, lon = float(parts[0]), float(parts[1])
+        # Regex to extract [lat, lon] safely
+        match = re.search(r"\[\s*(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)\s*\]", reply)
+        if match:
+            lat, lon = float(match.group(1)), float(match.group(2))
             return [lat, lon]
+        else:
+            logger.warning(f"Could not parse coords from Gemini response: {reply}")
+            return None
     except Exception as e:
         logger.warning(f"Gemini coordinate inference failed: {e}")
-    return None
-
+        return None
 
 if __name__ == "__main__":
     Config.setup_logging()
