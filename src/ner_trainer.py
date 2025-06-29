@@ -58,11 +58,11 @@ def train_ner_model(annotations_path: Path, model_output: Path) -> None:
     
     # Train model
     nlp.initialize()
-    for itn in range(15):  # 15 iterations
+    for itn in range(30):  # no of iterations, >30 for sharper results in my opinion
         losses = {}
         random.shuffle(examples)
-        for batch in spacy.util.minibatch(examples, size=2):
-            nlp.update(batch, losses=losses, drop=0.5)
+        for batch in spacy.util.minibatch(examples, size=4):
+            nlp.update(batch, losses=losses, drop=0.3)
         logger.info(f"Iteration {itn}, Losses: {losses}")
     
     # Save model
