@@ -1,4 +1,4 @@
-# 🛠️ GeoMine: Mining Project Extraction from PDF Reports (NER + GeoLocation)
+## 🛠️ GeoMine: Mining Project Extraction from PDF Reports (NER + GeoLocation)
 
 [![Built with spaCy](https://img.shields.io/badge/Built%20with-spaCy-09a3d5?logo=spacy)](https://spacy.io)
 [![Gemini API](https://img.shields.io/badge/LLM-Gemini%202.5%20Flash-ffcc00?logo=google)](https://ai.google.dev/)
@@ -81,6 +81,68 @@ Outputs will be saved to:
 
 ```
 data/output/final_results.jsonl
+```
+
+---
+
+## 🐳 Docker Setup (Optional, Recommended)
+
+### Build Docker Image
+
+Make sure [Docker Desktop](https://www.docker.com/products/docker-desktop/) is installed and running.
+
+From the project root directory, run:
+
+```bash
+docker build -t geomine-pipeline:latest .
+```
+
+### Run the Pipeline in Docker
+
+Run the entire pipeline inside Docker, mounting your local `data` folder for input/output persistence:
+
+```bash
+docker run --rm -v "$PWD/data:/app/data" geomine-pipeline:latest
+```
+
+- `--rm` removes the container after it finishes.
+- `-v "$PWD/data:/app/data"` mounts your local `data` folder into the container.
+
+### Debug / Interactive Mode
+
+Open an interactive shell inside the container:
+
+```bash
+docker run -it --rm -v "$PWD/data:/app/data" geomine-pipeline:latest /bin/bash
+```
+
+Inside the container shell, run the pipeline manually:
+
+```bash
+./run_pipeline.sh
+```
+
+---
+
+## ⚙️ Local Setup (Without Docker)
+
+### 1. Create and activate Python virtual environment
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
+
+### 2. Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### 3. Run the pipeline
+
+```bash
+bash run_pipeline.sh
 ```
 
 ---
