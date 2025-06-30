@@ -37,8 +37,8 @@ Given a collection of multi-page geological PDF reports, this pipeline:
 ### Installation
 
 ```bash
-git clone https://github.com/your-org/geomine.git
-cd geomine
+git clone https://github.com/ashkaaar/GeoMine-NER-Geolocation.git
+cd GeoMine-NER-Geolocation
 
 python3 -m venv venv
 source venv/bin/activate
