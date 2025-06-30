@@ -67,7 +67,6 @@ pip install -r requirements.txt
 ├── run_pipeline.sh                    # One-command runner
 ├── requirements.txt
 ├── README.md
-└── pipeline.log                       # Pipeline logs
 ```
 
 ### Run the Pipeline
