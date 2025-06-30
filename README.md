@@ -52,7 +52,6 @@ pip install -r requirements.txt
 ├── data/
 │   ├── input/
 │   │   ├── annotations.json           # NER labels from Label Studio
-│   │   ├── converted_annotations.json # spaCy-formatted training data
 │   │   └── pdf_reports/               # Input geological PDFs
 │   ├── output/                        # Final extracted results
 │   └── temp/                          # Intermediate files (e.g., text dump)
